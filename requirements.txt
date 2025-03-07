@@ -1,0 +1,6 @@
+Flask
+langchain
+transformers
+chromadb
+pandas
+sentence-transformers
