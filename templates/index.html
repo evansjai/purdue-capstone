@@ -2,7 +2,52 @@
 <html>
 <head>
     <title>InsightForge Demo</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
 </head>
 <body>
-    <h1>InsightForge Demo</h1>
-    <p>Upload your CSV
+    <div class="container">
+        <h1>InsightForge Demo</h1>
+        <p>Upload your sales data and ask questions!</p>
+
+        <form id="insight-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="data-file">Upload CSV File:</label>
+                <input type="file" class="form-control-file" id="data-file" name="data-file" accept=".csv" required>
+            </div>
+            <div class="form-group">
+                <label for="question">Ask a Question:</label>
+                <input type="text" class="form-control" id="question" name="question" placeholder="Enter your question">
+            </div>
+            <button type="submit" class="btn btn-primary">Get Insights</button>
+        </form>
+
+        <div id="results"></div>
+        <div id="answer-container"></div> <div id="answer-container"></div> </div>
+
+    <script>
+        const form = document.getElementById('insight-form');
+        const resultsDiv = document.getElementById('results');
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            const formData = new FormData(form);
+
+            fetch('/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Display the answer
+                const answerContainer = document.getElementById('answer-container');
+                answerContainer.innerHTML = `<p>${data.answer}</p>`;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = '<p>An error occurred.</p>';
+            });
+        });
+    </script>
+</body>
+</html>

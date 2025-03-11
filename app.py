@@ -1,6 +1,6 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 from langchain_community.llms import HuggingFacePipeline
-from langchain_community.chains import PebbloRetrievalQA
+from langchain.chains import RetrievalQA  # Import RetrievalQA
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import CSVLoader
@@ -24,7 +24,7 @@ embeddings = HuggingFaceEmbeddings(
 def index():
     if request.method == "POST":
         # Handle file upload (basic example, add error handling)
-        file = request.files["file"]
+        file = request.files["data-file"]
         file_path = "data/" + file.filename
         file.save(file_path)
 
@@ -36,7 +36,7 @@ def index():
         vectorstore = Chroma.from_documents(data, embeddings)
 
         # Initialize QA chain
-        qa_chain = PebbloRetrievalQA.from_chain_type(
+        qa_chain = RetrievalQA.from_chain_type(  # Use RetrievalQA
             llm=llm,
             chain_type="stuff",
             retriever=vectorstore.as_retriever()
@@ -46,9 +46,11 @@ def index():
         question = request.form["question"]
 
         # Get answer
-        answer = qa_chain.run(question)
+        answer = qa_chain.invoke(question)
 
-        return render_template("index.html", answer=answer)
+        answer_response = jsonify({'answer': answer})
+
+        return render_template("index.html", answer=answer_response)
 
     return render_template("index.html")
 
