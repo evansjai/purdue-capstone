@@ -24,30 +24,33 @@
         <div id="results"></div>
         <div id="answer-container"></div> <div id="answer-container"></div> </div>
 
-    <script>
-        const form = document.getElementById('insight-form');
-        const resultsDiv = document.getElementById('results');
+<script>
+    const form = document.getElementById('insight-form');
+    const resultsDiv = document.getElementById('results');
 
-        form.addEventListener('submit', (event) => {
-            event.preventDefault();
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
 
-            const formData = new FormData(form);
+        const formData = new FormData(form);
 
-            fetch('/', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Display the answer
-                const answerContainer = document.getElementById('answer-container');
-                answerContainer.innerHTML = `<p>${data.answer}</p>`;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                resultsDiv.innerHTML = '<p>An error occurred.</p>';
-            });
+        fetch('/process', {  // Use /process route instead of root
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())  // Ensure JSON parsing
+        .then(data => {
+            if (data.answer) {
+                document.getElementById('answer-container').innerHTML = `<p><strong>Answer:</strong> ${data.answer}</p>`;
+            } else {
+                document.getElementById('answer-container').innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            resultsDiv.innerHTML = '<p style="color:red;">An error occurred.</p>';
         });
-    </script>
+    });
+</script>
+
 </body>
 </html>
