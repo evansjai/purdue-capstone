@@ -3,6 +3,7 @@
 <head>
     <title>InsightForge Demo</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -22,7 +23,8 @@
         </form>
 
         <div id="results"></div>
-        <div id="answer-container"></div> <div id="answer-container"></div> </div>
+        <div id="answer-container"></div>
+        <div id="plotly-container" style="width: 800px; height: 600px;"></div>
 
 <script>
     const form = document.getElementById('insight-form');
@@ -33,16 +35,20 @@
 
         const formData = new FormData(form);
 
-        fetch('/process', {  // Use /process route instead of root
+        fetch('/process', {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())  // Ensure JSON parsing
+        .then(response => response.json())
         .then(data => {
             if (data.answer) {
                 document.getElementById('answer-container').innerHTML = `<p><strong>Answer:</strong> ${data.answer}</p>`;
             } else {
                 document.getElementById('answer-container').innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
+            }
+            if (data.plotly_chart) {
+                document.getElementById('plotly-container').innerHTML = ''; // Clear previous chart
+                Plotly.newPlot('plotly-container', data.plotly_chart.data, data.plotly_chart.layout);
             }
         })
         .catch(error => {
