@@ -47,8 +47,10 @@
                 document.getElementById('answer-container').innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
             }
             if (data.plotly_chart) {
+                document.getElementById('plotly-container').innerHTML = data.plotly_chart// Clear previous chart
+                //Plotly.newPlot('plotly-container', data.plotly_chart.data, data.plotly_chart.layout);
+            } else {
                 document.getElementById('plotly-container').innerHTML = ''; // Clear previous chart
-                Plotly.newPlot('plotly-container', data.plotly_chart.data, data.plotly_chart.layout);
             }
         })
         .catch(error => {
