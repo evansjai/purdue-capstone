@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import base64
 from io import BytesIO
-
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 app = Flask(__name__, template_folder="templates")
 
 llm = HuggingFacePipeline(pipeline=pipeline(
@@ -22,6 +23,8 @@ llm = HuggingFacePipeline(pipeline=pipeline(
     max_new_tokens=200,
 
 ))
+
+sentence_model = SentenceTransformer('all-mpnet-base-v2')
 
 @app.route("/", methods=["GET"])
 def index():
@@ -70,6 +73,41 @@ def process():
     product_string = ", ".join(unique_products) # creates "product1, product2, product3"
     region_string = ", ".join(unique_regions)
 
+    # Embed the question using sentence-transformers
+    question_embedding = sentence_model.encode(question).reshape(1, -1)  # reshape for cosine_similarity
+
+    # Embed the data summaries using sentence-transformers
+    product_summary = df.groupby('Product')['Sales'].sum().to_string()
+    region_summary = df.groupby('Region')['Sales'].sum().to_string()
+    gender_summary = df.groupby('Customer_Gender')['Sales'].sum().to_string()
+    age_summary = df.groupby('Age_Range')['Sales'].sum().to_string()
+    month_summary = df.groupby(df['Date'].dt.month_name())['Sales'].sum().to_string()  # use month names
+    gender_age_summary = df.groupby(['Customer_Gender', 'Age_Range'])['Sales'].sum().reset_index().to_string(
+        index=False)
+
+    summary_embeddings = sentence_model.encode([
+        product_summary,
+        region_summary,
+        gender_summary,
+        age_summary,
+        month_summary,
+        gender_age_summary,
+    ])
+
+    # Calculate cosine similarities
+    similarities = cosine_similarity(question_embedding, summary_embeddings)
+    most_similar_index = similarities.argmax()
+
+    # Select the most relevant summary
+    relevant_summary = [
+        product_summary,
+        region_summary,
+        gender_summary,
+        age_summary,
+        month_summary,
+        gender_age_summary,
+    ][most_similar_index]
+
     # Update your prompt
     prompt = f"""
 Sales Data Report:
@@ -100,6 +138,9 @@ Sales Data Report:
 
 - Sales by Gender and Age Range:
 {gender_age_sales.to_string(index=False)}
+
+**Relevant Summary:**
+{relevant_summary}
 
 **User Question:**
 {question}
