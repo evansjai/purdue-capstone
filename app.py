@@ -72,24 +72,38 @@ def process():
 
     # Update your prompt
     prompt = f"""
-    Sales Data Summary:
-    - Total Sales: {df['Sales'].sum()}
-    - Average Sales: {df['Sales'].mean()}
-    - Unique Products: {product_string} 
-    - Unique Regions: {region_string}
-    - Average Customer Age: {df['Customer_Age'].mean()}
-    - Average Customer Satisfaction: {df['Customer_Satisfaction'].mean()}
-    - Sales by Product: {df.groupby('Product')['Sales'].sum().to_string()}
-    - Sales by Region: {df.groupby('Region')['Sales'].sum().to_string()}
-    - Sales by Gender: {sales_by_gender.to_string()}
-    - Sales by Age Range: {sales_by_age.to_string()}
-    - Sales by Month: {sales_by_month.to_string()}
-    - Sales by Gender and Age Range: {gender_age_sales.to_string()}
-    
-        
-    Question: {question}
-    
-    """
+Sales Data Report:
+
+**Summary Statistics:**
+- Total Sales: ${df['Sales'].sum():,}
+- Average Sales: ${df['Sales'].mean():.2f}
+- Unique Products: {product_string}
+- Unique Regions: {region_string}
+- Average Customer Age: {df['Customer_Age'].mean():.2f}
+- Average Customer Satisfaction: {df['Customer_Satisfaction'].mean():.4f}
+
+**Sales Breakdown:**
+- Sales by Product:
+{df.groupby('Product')['Sales'].sum().to_string()}
+
+- Sales by Region:
+{df.groupby('Region')['Sales'].sum().to_string()}
+
+- Sales by Gender:
+{sales_by_gender.to_string()}
+
+- Sales by Age Range:
+{sales_by_age.to_string()}
+
+- Sales by Month:
+{sales_by_month.to_string()}
+
+- Sales by Gender and Age Range:
+{gender_age_sales.to_string(index=False)}
+
+**User Question:**
+{question}
+"""
 
     print(prompt)
 
@@ -99,7 +113,7 @@ def process():
 
     # Visualization Logic (extended from notebook)
     if "plot" in question.lower() or "chart" in question.lower() or "visualize" in question.lower():
-        if "satisfaction" in question.lower():
+        if "satisfaction" in question.lower() or "heatmap" in question.lower():
             # Calculate satisfaction by gender, age, and product
             satisfaction_by_group = df.groupby(["Product", "Customer_Gender", "Age_Range"])[
                 "Customer_Satisfaction"].mean().reset_index()
@@ -215,34 +229,6 @@ def process():
             buffer.seek(0)
             plot_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
             return jsonify({"answer": response, "plotly_chart": f'<img src="data:image/png;base64,{plot_data}" />'})
-        elif "heatmap" in question.lower():
-            # Group and aggregate data
-            gender_age_product_sales = df.groupby(['Customer_Gender', 'Age_Range', 'Product'])[
-                'Sales'].sum().reset_index()
-
-            # Get unique products
-            products = gender_age_product_sales['Product'].unique()
-
-            # Create multiple heatmaps, one for each product
-            heatmap_images = []
-            for product in products:
-                product_data = gender_age_product_sales[gender_age_product_sales['Product'] == product]
-                heatmap_data = product_data.pivot_table(index='Customer_Gender', columns='Age_Range', values='Sales',
-                                                        fill_value=0)
-
-                plt.figure(figsize=(10, 6))
-                sns.heatmap(heatmap_data, annot=True, fmt=".0f", cmap="YlGnBu")
-                plt.title(f'Sales by Gender and Age Range for {product}')
-                plt.xlabel('Age Range')
-                plt.ylabel('Gender')
-
-                buffer = BytesIO()
-                plt.savefig(buffer, format='png', bbox_inches='tight')
-                buffer.seek(0)
-                plot_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
-                heatmap_images.append(f'<img src="data:image/png;base64,{plot_data}" />')
-                plt.close()  # close plot to prevent overlaying plots.
-            return jsonify({"answer": response, "plotly_chart": "".join(heatmap_images)})
         else:
             return jsonify({"answer": response, "plotly_chart": "Could not determine plot type."})
     else:
