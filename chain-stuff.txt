@@ -1,0 +1,21 @@
+
+    loader = DirectoryLoader("data/", glob= file.filename, loader_cls=CSVLoader)
+    documents = loader.load()
+
+    # Split documents into chunks
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    texts = text_splitter.split_documents(documents)
+
+    # Embeddings and Vector Store
+    embeddings = OpenAIEmbeddings()
+    persist_directory = "csv_db"
+    vectordb = Chroma.from_documents(documents=texts, embedding=embeddings, persist_directory=persist_directory)
+
+    # RetrievalQA Chain
+    qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=vectordb.as_retriever())
+
+
+    ....
+
+
+    response = qa_chain.run(prompt)
