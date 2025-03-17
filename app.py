@@ -19,7 +19,8 @@ app = Flask(__name__, template_folder="templates")
 llm = HuggingFacePipeline(pipeline=pipeline(
     "text2text-generation",
     model="google/flan-t5-small",
-    max_new_tokens=200
+    max_new_tokens=200,
+
 ))
 
 @app.route("/", methods=["GET"])
@@ -54,19 +55,28 @@ def process():
     sales_by_month = df.groupby('Month')['Sales'].sum()
 
     # Calculate Sales by Gender and Age
-    gender_age_sales = df.groupby(['Customer_Gender', 'Age_Range'])['Sales'].sum().reset_index()
+    gender_age_sales = df.groupby(['Customer_Gender', 'Age_Range'], observed=True)['Sales'].sum().reset_index()
 
     # Update the prompt
     question = request.form.get("question", "")
     if not question:
         question = "Summarize the key insights from the data."
 
+    # Get unique products and regions
+    unique_products = list(set(df['Product']))
+    unique_regions = list(set(df['Region']))
+
+    # Format the product list into a string
+    product_string = ", ".join(unique_products) # creates "product1, product2, product3"
+    region_string = ", ".join(unique_regions)
+
+    # Update your prompt
     prompt = f"""
     Sales Data Summary:
     - Total Sales: {df['Sales'].sum()}
     - Average Sales: {df['Sales'].mean()}
-    - Unique Products: {list(set(df['Product'].unique()))}
-    - Unique Regions: {df['Region'].unique()}
+    - Unique Products: {product_string} 
+    - Unique Regions: {region_string}
     - Average Customer Age: {df['Customer_Age'].mean()}
     - Average Customer Satisfaction: {df['Customer_Satisfaction'].mean()}
     - Sales by Product: {df.groupby('Product')['Sales'].sum().to_string()}
@@ -76,28 +86,62 @@ def process():
     - Sales by Month: {sales_by_month.to_string()}
     - Sales by Gender and Age Range: {gender_age_sales.to_string()}
     
-    Answer the question from the Sales Data Summary:
-    {question}
+        
+    Question: {question}
     
     """
 
+    print(prompt)
+
     response = llm.invoke(prompt)
+    print(response)
     response = format_sales_data_to_html(response)
 
     # Visualization Logic (extended from notebook)
     if "plot" in question.lower() or "chart" in question.lower() or "visualize" in question.lower():
         if "satisfaction" in question.lower():
-            df1 = df.groupby(by='Region', as_index=False)['Customer_Satisfaction'].mean()
-            plt.figure(figsize=(6, 4))
-            plt.bar(x=df1['Region'], height=df1['Customer_Satisfaction'])
-            plt.title("Customer Satisfaction by Region")
-            plt.xlabel("Region")
-            plt.ylabel("Customer Satisfaction")
-            buffer = BytesIO()
-            plt.savefig(buffer, format='png')
-            buffer.seek(0)
-            plot_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
-            return jsonify({"answer": response, "plotly_chart": f'<img src="data:image/png;base64,{plot_data}" />'})
+            # Calculate satisfaction by gender, age, and product
+            satisfaction_by_group = df.groupby(["Product", "Customer_Gender", "Age_Range"])[
+                "Customer_Satisfaction"].mean().reset_index()
+
+            # Get unique products
+            products = satisfaction_by_group["Product"].unique()
+
+            heatmap_images = []
+            for product in products:
+                product_data = satisfaction_by_group[satisfaction_by_group["Product"] == product]
+                heatmap_data = product_data.pivot_table(index="Customer_Gender", columns="Age_Range",
+                                                        values="Customer_Satisfaction", fill_value=0, observed=False)
+
+                # Ensure all age ranges are present
+                age_ranges = ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"]
+                for age_range in age_ranges:
+                    if age_range not in heatmap_data.columns:
+                        heatmap_data[age_range] = 0
+
+                # Ensure all genders are present
+                genders = df["Customer_Gender"].unique()  # get unique genders from original dataframe.
+                for gender in genders:
+                    if gender not in heatmap_data.index:
+                        heatmap_data.loc[gender] = 0
+
+                heatmap_data = heatmap_data[sorted(heatmap_data.columns)]  # sort columns
+                heatmap_data = heatmap_data.sort_index()  # sort rows
+
+                plt.figure(figsize=(10, 6))
+                sns.heatmap(heatmap_data, annot=True, cmap="YlGnBu")
+                plt.title(f"Satisfaction by Gender and Age Range for {product}")
+                plt.xlabel("Age Range")
+                plt.ylabel("Gender")
+
+                buffer = BytesIO()
+                plt.savefig(buffer, format="png", bbox_inches="tight")
+                buffer.seek(0)
+                plot_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                heatmap_images.append(f'<img src="data:image/png;base64,{plot_data}" />')
+                plt.close()  # Close plot to prevent overlaying plots
+
+            return jsonify({"answer": response, "plotly_chart": "".join(heatmap_images)})
         elif "quarter" in question.lower():
             sales_by_quarter_2024 = df[df['Date'].dt.year == 2024].groupby('Quarter')['Sales'].sum()
             plt.figure(figsize=(6, 3))
@@ -198,7 +242,7 @@ def process():
                 plot_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
                 heatmap_images.append(f'<img src="data:image/png;base64,{plot_data}" />')
                 plt.close()  # close plot to prevent overlaying plots.
-            return jsonify({"answer": response, "plotly_chart": f'<img src="data:image/png;base64,{"".join(heatmap_images)}" />'})
+            return jsonify({"answer": response, "plotly_chart": "".join(heatmap_images)})
         else:
             return jsonify({"answer": response, "plotly_chart": "Could not determine plot type."})
     else:
@@ -206,6 +250,8 @@ def process():
 
     if __name__ == "__main__":
         app.run(debug=True)
+
+
 
 def format_sales_data_to_html(sales_data_string):
     """
@@ -221,19 +267,17 @@ def format_sales_data_to_html(sales_data_string):
     lines = sales_data_string.split('- ')  # Split the string into lines
     html_lines = []
 
-    html_lines.append("    <h3>Sales Data Summary</h3>")
-    html_lines.append("    <ul>")
-
-    for line in lines[1:]:  # Skip the first empty line
+    key_value_pairs ={}
+    for line in lines[:]:  # Skip the first empty line
         if ":" in line:
             key, value = line.split(":", 1)
             key = key.strip()
             value = value.strip()
-
-            html_lines.append(f"        <li><strong>{key}:</strong> {value}</li>")
+            key_value_pairs[key] = value
         else:
-            html_lines.append(f"        <li>{line}</li>")
-    html_lines.append("    </ul>")
+            html_lines.append(f"<p>{line}</p>")
+    for key in key_value_pairs:
+        html_lines.append(f"<p><b>- {key}</b>: {key_value_pairs[key]}</p>")
 
     return "\n".join(html_lines)
 
